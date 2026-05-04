@@ -1,0 +1,24 @@
+.footer {
+  margin-top: 48px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(2, 6, 23, 0.72);
+}
+
+.inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 0 32px;
+  color: #94a3b8;
+  font-size: 0.92rem;
+}
+
+.inner p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .inner {
+    flex-direction: column;
+  }
+}
