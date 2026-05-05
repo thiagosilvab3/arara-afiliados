@@ -1,40 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Product } from "../lib/types";
-import { getProductBySlug } from "../lib/storage";
 import { formatCurrency, getGradientByNiche } from "../lib/utils";
 import { trackEvent } from "../lib/analytics";
 import styles from "./ProductDetails.module.css";
 
-export function ProductDetails({ slug }: { slug: string }) {
-  const [product, setProduct] = useState<Product | null>(null);
+type ProductDetailsProps = {
+  product: Product;
+};
+
+export function ProductDetails({ product }: ProductDetailsProps) {
   const tracked = useRef("");
 
   useEffect(() => {
-    const item = getProductBySlug(slug) || null;
-    setProduct(item);
-
-    if (item && tracked.current !== slug) {
-      trackEvent("product_view", { slug });
-      tracked.current = slug;
+    if (tracked.current !== product.slug) {
+      trackEvent("product_view", { slug: product.slug });
+      tracked.current = product.slug;
     }
-  }, [slug]);
-
-  if (!product) {
-    return (
-      <div className={`container ${styles.wrapper}`}>
-        <div className={`panel ${styles.notFound}`}>
-          <h1>Produto não encontrado</h1>
-          <p>Verifique o link ou volte ao catálogo.</p>
-          <Link href="/" className="btn btnPrimary">
-            Voltar ao catálogo
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  }, [product.slug]);
 
   const handleAffiliateClick = () => {
     trackEvent("outbound_click", { slug: product.slug });
@@ -77,15 +62,21 @@ export function ProductDetails({ slug }: { slug: string }) {
         </section>
 
         <aside className={`panel ${styles.sidebar}`}>
-          {product.image ? (
-            <img src={product.image} alt={product.title} className={styles.image} />
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt={product.title}
+              className={styles.image}
+            />
           ) : null}
 
           <div className={styles.priceArea}>
             <span className="muted">Oferta selecionada</span>
             <strong className={styles.price}>{formatCurrency(product.price)}</strong>
             {product.originalPrice ? (
-              <span className={styles.oldPrice}>{formatCurrency(product.originalPrice)}</span>
+              <span className={styles.oldPrice}>
+                {formatCurrency(product.originalPrice)}
+              </span>
             ) : null}
           </div>
 
