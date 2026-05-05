@@ -1,177 +1,258 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { Product } from "../lib/types";
-import { getProductBySlug } from "../lib/storage";
-import { formatCurrency } from "../lib/utils";
+import { useMemo, useState } from "react";
+import type { Product } from "../lib/types";
 import { trackEvent } from "../lib/analytics";
+import { formatCurrency } from "../lib/utils";
+import { createOrderAction } from "../app/checkout/actions";
 import styles from "./CheckoutView.module.css";
 
-export function CheckoutView() {
-  const searchParams = useSearchParams();
-  const slug = searchParams.get("slug") || "";
-  const [product, setProduct] = useState<Product | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const tracked = useRef("");
+type CheckoutViewProps = {
+  product: Product;
+};
 
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    payment: "pix"
-  });
+type CheckoutStatus = "idle" | "processing" | "success";
 
-  useEffect(() => {
-    const item = slug ? getProductBySlug(slug) || null : null;
-    setProduct(item);
+export function CheckoutView({ product }: CheckoutViewProps) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<CheckoutStatus>("idle");
+  const [error, setError] = useState("");
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
 
-    if (item && tracked.current !== slug) {
-      trackEvent("checkout_start", { slug });
-      tracked.current = slug;
+  const isAffiliate = product.type === "affiliate";
+
+  const canSubmit = useMemo(() => {
+    return name.trim().length > 1 && email.trim().length > 3;
+  }, [name, email]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!canSubmit || status === "processing") {
+      return;
     }
-  }, [slug]);
 
-  if (!product) {
-    return (
-      <div className={`container ${styles.wrapper}`}>
-        <div className={`panel ${styles.box}`}>
-          <h1>Checkout sem produto</h1>
-          <p>Selecione um item antes de continuar.</p>
-          <Link href="/" className="btn btnPrimary">
-            Voltar ao catálogo
-          </Link>
-        </div>
-      </div>
-    );
-  }
+    setError("");
+    setStatus("processing");
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setProcessing(true);
+    trackEvent("checkout_start", {
+      slug: product.slug,
+    });
 
-    setTimeout(() => {
-      trackEvent("checkout_complete", { slug: product.slug });
-      setProcessing(false);
-      setSuccess(true);
-    }, 1000);
+    try {
+      const result = await createOrderAction({
+        slug: product.slug,
+        customerName: name,
+        customerEmail: email,
+      });
+
+      if (!result.success) {
+        setError(result.message);
+        setStatus("idle");
+        return;
+      }
+
+      trackEvent("lead_submit", {
+        slug: product.slug,
+      });
+
+      setCreatedOrderId(result.orderId);
+      setStatus("success");
+    } catch {
+      setError("Não foi possível concluir o checkout agora.");
+      setStatus("idle");
+    }
   };
 
-  if (success) {
-    return (
-      <div className={`container ${styles.wrapper}`}>
-        <div className={`panel ${styles.success}`}>
-          <div className={styles.check}>✓</div>
-          <h1>Checkout simulado concluído</h1>
-          <p>
-            O pedido de <strong>{product.title}</strong> foi registrado apenas para
-            demonstração.
-          </p>
+  const handleAffiliateClick = () => {
+    trackEvent("affiliate_click", {
+      slug: product.slug,
+    });
 
-          <div className={styles.successActions}>
-            {product.type === "affiliate" ? (
-              <a
-                href={product.affiliateUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btnPrimary"
-                onClick={() => trackEvent("outbound_click", { slug: product.slug })}
-              >
-                Seguir para o parceiro
-              </a>
-            ) : (
-              <Link href="/" className="btn btnPrimary">
-                Voltar para a loja
-              </Link>
-            )}
-
-            <Link href={`/produto/${product.slug}`} className="btn btnSecondary">
-              Ver produto novamente
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    window.open(product.affiliateUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className={`container ${styles.wrapper}`}>
+      <div className={styles.breadcrumb}>
+        <Link href="/">Início</Link>
+        <span>/</span>
+        <Link href={`/produto/${product.slug}`}>{product.title}</Link>
+        <span>/</span>
+        <strong>Checkout</strong>
+      </div>
+
       <div className={styles.layout}>
-        <aside className={`panel ${styles.summary}`}>
-          <span className="muted">Resumo do pedido</span>
-          <h1>{product.title}</h1>
-          <p>{product.description}</p>
+        <section className={`panel ${styles.formPanel}`}>
+          <div className={styles.header}>
+            <span className="badge">
+              {isAffiliate ? "Checkout afiliado" : "Checkout produto próprio"}
+            </span>
+            <h1 className={styles.title}>Finalizar interesse</h1>
+            <p className={styles.subtitle}>
+              Preencha seus dados para continuar com {product.title}.
+            </p>
+          </div>
 
-          <div className={styles.infoList}>
-            <div className={`card ${styles.infoItem}`}>
-              <span className="muted">Nicho</span>
-              <strong>{product.niche}</strong>
+          {status === "success" ? (
+            <div className={styles.successBox}>
+              <h2>Checkout concluído</h2>
+              <p>
+                Seu interesse em <strong>{product.title}</strong> foi registrado.
+              </p>
+
+              {createdOrderId ? (
+                <p>
+                  <strong>Pedido:</strong> {createdOrderId}
+                </p>
+              ) : null}
+
+              {isAffiliate ? (
+                <>
+                  <p>
+                    Como este é um produto afiliado, você pode seguir para a oferta
+                    oficial do parceiro.
+                  </p>
+                  <button
+                    onClick={handleAffiliateClick}
+                    className="btn btnPrimary"
+                  >
+                    Abrir oferta afiliada
+                  </button>
+                </>
+              ) : (
+                <p>
+                  Pedido salvo no Supabase com status inicial de pagamento pendente.
+                </p>
+              )}
+
+              <div className={styles.successActions}>
+                <Link href="/" className="btn btnSecondary">
+                  Voltar ao catálogo
+                </Link>
+                <Link
+                  href={`/produto/${product.slug}`}
+                  className="btn btnSecondary"
+                >
+                  Ver produto
+                </Link>
+              </div>
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} className={styles.form}>
+              <label className={styles.fieldGroup}>
+                <span>Nome</span>
+                <input
+                  type="text"
+                  className="field"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Seu nome"
+                />
+              </label>
 
-            <div className={`card ${styles.infoItem}`}>
+              <label className={styles.fieldGroup}>
+                <span>E-mail</span>
+                <input
+                  type="email"
+                  className="field"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@exemplo.com"
+                />
+              </label>
+
+              {error ? <p className={styles.error}>{error}</p> : null}
+
+              <div className={styles.actions}>
+                <button
+                  type="submit"
+                  className="btn btnPrimary"
+                  disabled={!canSubmit || status === "processing"}
+                >
+                  {status === "processing" ? "Processando..." : "Continuar"}
+                </button>
+
+                <Link
+                  href={`/produto/${product.slug}`}
+                  className="btn btnSecondary"
+                >
+                  Voltar
+                </Link>
+              </div>
+            </form>
+          )}
+        </section>
+
+        <aside className={`panel ${styles.summaryPanel}`}>
+          <h2 className={styles.summaryTitle}>Resumo do produto</h2>
+
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt={product.title}
+              className={styles.image}
+            />
+          ) : null}
+
+          <div className={styles.summaryBlock}>
+            <h3>{product.title}</h3>
+            <p className={styles.description}>{product.description}</p>
+          </div>
+
+          <div className={styles.priceArea}>
+            <span className="muted">Valor atual</span>
+            <strong className={styles.price}>
+              {formatCurrency(product.price)}
+            </strong>
+            {product.originalPrice ? (
+              <span className={styles.oldPrice}>
+                {formatCurrency(product.originalPrice)}
+              </span>
+            ) : null}
+          </div>
+
+          <div className={styles.meta}>
+            <div className={`card ${styles.metaItem}`}>
               <span className="muted">Tipo</span>
-              <strong>{product.type === "own" ? "Produto próprio" : "Afiliado"}</strong>
+              <strong>{isAffiliate ? "Afiliado" : "Próprio"}</strong>
             </div>
 
-            <div className={`card ${styles.infoItem}`}>
-              <span className="muted">Valor</span>
-              <strong>{formatCurrency(product.price)}</strong>
+            <div className={`card ${styles.metaItem}`}>
+              <span className="muted">Plataforma</span>
+              <strong>{product.platform}</strong>
+            </div>
+
+            <div className={`card ${styles.metaItem}`}>
+              <span className="muted">Avaliação</span>
+              <strong>⭐ {product.rating.toFixed(1)}</strong>
+            </div>
+
+            <div className={`card ${styles.metaItem}`}>
+              <span className="muted">Popularidade</span>
+              <strong>{product.popularity}</strong>
             </div>
           </div>
+
+          {product.highlights.length > 0 ? (
+            <div className={styles.highlights}>
+              <h3>Destaques</h3>
+              <ul>
+                {product.highlights.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className={styles.notice}>
+            {isAffiliate
+              ? "Este checkout salva o lead em orders e depois redireciona para o parceiro."
+              : "Este checkout salva o pedido em orders com pagamento pendente."}
+          </div>
         </aside>
-
-        <section className={`panel ${styles.formPanel}`}>
-          <h2>Finalizar compra</h2>
-          <p className="sectionText">
-            Fluxo demonstrativo para apresentar a experiência do usuário.
-          </p>
-
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div>
-              <label className={styles.label}>Nome completo</label>
-              <input
-                required
-                className="field"
-                value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <label className={styles.label}>E-mail</label>
-              <input
-                required
-                type="email"
-                className="field"
-                value={form.email}
-                onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <label className={styles.label}>Pagamento</label>
-              <select
-                className="select"
-                value={form.payment}
-                onChange={(e) => setForm((prev) => ({ ...prev, payment: e.target.value }))}
-              >
-                <option value="pix">PIX</option>
-                <option value="cartao">Cartão de crédito</option>
-                <option value="boleto">Boleto</option>
-              </select>
-            </div>
-
-            <button type="submit" disabled={processing} className="btn btnPrimary">
-              {processing ? "Processando..." : `Confirmar ${formatCurrency(product.price)}`}
-            </button>
-          </form>
-
-          <p className={styles.disclaimer}>
-            Este checkout é simulado. Para produção, conecte gateway real, autenticação
-            e backend.
-          </p>
-        </section>
       </div>
     </div>
   );

@@ -1,92 +1,35 @@
-import { AnalyticsState } from "./types";
+export type AnalyticsEventName =
+  | "page_view"
+  | "product_view"
+  | "checkout_start"
+  | "lead_submit"
+  | "affiliate_click";
 
-const ANALYTICS_KEY = "arara_analytics";
+type TrackEventPayload = {
+  slug?: string;
+  path?: string;
+};
 
-function isBrowser() {
-  return typeof window !== "undefined";
-}
-
-function initialState(): AnalyticsState {
-  return {
-    pageViews: 0,
-    checkoutStarts: 0,
-    checkoutCompletions: 0,
-    outboundClicks: 0,
-    adminAdds: 0,
-    productViews: {},
-    paths: {}
-  };
-}
-
-function saveAnalytics(state: AnalyticsState) {
-  if (!isBrowser()) return;
-  localStorage.setItem(ANALYTICS_KEY, JSON.stringify(state));
-  window.dispatchEvent(new Event("arara-analytics-updated"));
-}
-
-export function getAnalytics(): AnalyticsState {
-  if (!isBrowser()) return initialState();
+export async function trackEvent(
+  eventName: AnalyticsEventName,
+  payload: TrackEventPayload = {}
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
 
   try {
-    const raw = localStorage.getItem(ANALYTICS_KEY);
-    if (!raw) return initialState();
-
-    const parsed = JSON.parse(raw);
-    return {
-      ...initialState(),
-      ...parsed,
-      productViews: parsed.productViews || {},
-      paths: parsed.paths || {}
-    };
+    await fetch("/api/analytics", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        eventName,
+        ...payload,
+      }),
+    });
   } catch {
-    return initialState();
+    // silencia erro de analytics para não quebrar UX
   }
-}
-
-export function trackEvent(
-  event:
-    | "page_view"
-    | "product_view"
-    | "checkout_start"
-    | "checkout_complete"
-    | "outbound_click"
-    | "admin_add",
-  payload?: { slug?: string; path?: string }
-) {
-  if (!isBrowser()) return;
-
-  const state = getAnalytics();
-
-  switch (event) {
-    case "page_view":
-      state.pageViews += 1;
-      if (payload?.path) {
-        state.paths[payload.path] = (state.paths[payload.path] || 0) + 1;
-      }
-      break;
-
-    case "product_view":
-      if (payload?.slug) {
-        state.productViews[payload.slug] = (state.productViews[payload.slug] || 0) + 1;
-      }
-      break;
-
-    case "checkout_start":
-      state.checkoutStarts += 1;
-      break;
-
-    case "checkout_complete":
-      state.checkoutCompletions += 1;
-      break;
-
-    case "outbound_click":
-      state.outboundClicks += 1;
-      break;
-
-    case "admin_add":
-      state.adminAdds += 1;
-      break;
-  }
-
-  saveAnalytics(state);
 }

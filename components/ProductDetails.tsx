@@ -22,9 +22,9 @@ export function ProductDetails({ product }: ProductDetailsProps) {
   }, [product.slug]);
 
   const handleAffiliateClick = () => {
-    trackEvent("outbound_click", { slug: product.slug });
-    window.open(product.affiliateUrl, "_blank", "noopener,noreferrer");
-  };
+  trackEvent("affiliate_click", { slug: product.slug });
+  window.open(product.affiliateUrl, "_blank", "noopener,noreferrer");
+};
 
   return (
     <div className={`container ${styles.wrapper}`}>

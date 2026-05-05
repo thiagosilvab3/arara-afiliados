@@ -1,21 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getAnalytics, trackEvent } from "../lib/analytics";
-import {
-  getAllProducts,
-  getCustomProducts,
-  removeCustomProduct,
-  saveCustomProduct
-} from "../lib/storage";
-import { AnalyticsState, Niche, Product, ProductType } from "../lib/types";
+import { useMemo, useState, useTransition } from "react";
+import type { Product } from "../lib/types";
+import { createProductAction, deleteProductAction } from "../app/admin/actions";
 import { formatCurrency, slugify } from "../lib/utils";
 import styles from "./AdminDashboard.module.css";
 
+type AdminDashboardProps = {
+  initialProducts: Product[];
+};
+
+type ProductStatus = "draft" | "active" | "inactive" | "archived";
+type ProductType = "own" | "affiliate";
+type Niche = Product["niche"];
+
+const NICHE_OPTIONS: Niche[] = [
+  "Marketing Digital",
+  "Finanças",
+  "Fitness",
+  "Idiomas",
+];
+
+const STATUS_OPTIONS: ProductStatus[] = [
+  "draft",
+  "active",
+  "inactive",
+  "archived",
+];
+
 type FormState = {
   title: string;
+  slug: string;
   niche: Niche;
-  description: string;
+  shortDescription: string;
   longDescription: string;
   price: string;
   originalPrice: string;
@@ -23,382 +40,425 @@ type FormState = {
   rating: string;
   platform: string;
   affiliateUrl: string;
-  type: ProductType;
+  productType: ProductType;
   highlights: string;
-  image: string;
+  imageUrl: string;
+  featured: boolean;
+  productStatus: ProductStatus;
 };
 
 const initialForm: FormState = {
   title: "",
+  slug: "",
   niche: "Marketing Digital",
-  description: "",
+  shortDescription: "",
   longDescription: "",
-  price: "97",
+  price: "",
   originalPrice: "",
-  popularity: "80",
-  rating: "4.8",
-  platform: "Arara",
+  popularity: "50",
+  rating: "4.5",
+  platform: "Hotmart",
   affiliateUrl: "",
-  type: "own",
-  highlights: "Acesso imediato,Material de apoio,Suporte",
-  image: ""
+  productType: "affiliate",
+  highlights: "",
+  imageUrl: "",
+  featured: false,
+  productStatus: "draft",
 };
 
-export function AdminDashboard() {
+function parseHighlights(value: string) {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function AdminDashboard({ initialProducts }: AdminDashboardProps) {
   const [form, setForm] = useState<FormState>(initialForm);
-  const [customProducts, setCustomProducts] = useState<Product[]>([]);
-  const [analytics, setAnalytics] = useState<AnalyticsState>(getAnalytics());
-  const [notice, setNotice] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
 
-  const refresh = () => {
-    setCustomProducts(getCustomProducts());
-    setAnalytics(getAnalytics());
-  };
+  const stats = useMemo(() => {
+    const total = initialProducts.length;
+    const featured = initialProducts.filter((p) => p.featured).length;
+    const affiliate = initialProducts.filter((p) => p.type === "affiliate").length;
+    const own = initialProducts.filter((p) => p.type === "own").length;
 
-  useEffect(() => {
-    refresh();
+    return { total, featured, affiliate, own };
+  }, [initialProducts]);
 
-    window.addEventListener("arara-products-updated", refresh);
-    window.addEventListener("arara-analytics-updated", refresh);
+  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
 
-    return () => {
-      window.removeEventListener("arara-products-updated", refresh);
-      window.removeEventListener("arara-analytics-updated", refresh);
-    };
-  }, []);
+  function handleTitleChange(value: string) {
+    setForm((current) => {
+      const nextSlug =
+        current.slug.trim().length === 0 || current.slug === slugify(current.title)
+          ? slugify(value)
+          : current.slug;
 
-  const topViewed = useMemo(() => {
-    const nameMap = new Map(getAllProducts().map((item) => [item.slug, item.title]));
+      return {
+        ...current,
+        title: value,
+        slug: nextSlug,
+      };
+    });
+  }
 
-    return Object.entries(analytics.productViews)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([slug, views]) => ({
-        slug,
-        title: nameMap.get(slug) || slug,
-        views
-      }));
-  }, [analytics]);
-
-  const handleFile = (file?: File) => {
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setForm((prev) => ({ ...prev, image: String(reader.result || "") }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setNotice("");
-
-    if (form.type === "affiliate" && !form.affiliateUrl.trim()) {
-      setNotice("Informe um link de afiliado para produtos do tipo afiliado.");
-      return;
-    }
-
-    const baseSlug = slugify(form.title);
-    const existingSlugs = new Set(getAllProducts().map((item) => item.slug));
-    const uniqueSlug = existingSlugs.has(baseSlug) ? `${baseSlug}-${Date.now()}` : baseSlug;
-
-    const product: Product = {
-      id: `custom-${Date.now()}`,
-      slug: uniqueSlug,
-      title: form.title.trim(),
-      niche: form.niche,
-      description: form.description.trim(),
-      longDescription: form.longDescription.trim(),
-      price: Number(form.price),
-      originalPrice: form.originalPrice ? Number(form.originalPrice) : undefined,
-      popularity: Number(form.popularity),
-      rating: Number(form.rating),
-      platform: form.platform.trim() || "Arara",
-      affiliateUrl: form.type === "affiliate" ? form.affiliateUrl.trim() : "",
-      type: form.type,
-      highlights: form.highlights
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 5),
-      image: form.image || undefined
-    };
-
-    saveCustomProduct(product);
-    trackEvent("admin_add", { slug: product.slug });
-    setNotice("Produto salvo com sucesso no catálogo local.");
+  function resetForm() {
     setForm(initialForm);
-    refresh();
-  };
+  }
 
-  const handleRemove = (slug: string) => {
-    removeCustomProduct(slug);
-    refresh();
-  };
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+
+    startTransition(async () => {
+      const result = await createProductAction({
+        slug: form.slug,
+        title: form.title,
+        niche: form.niche,
+        shortDescription: form.shortDescription,
+        longDescription: form.longDescription,
+        price: form.price,
+        originalPrice: form.originalPrice ? form.originalPrice : null,
+        popularity: form.popularity,
+        rating: form.rating,
+        platform: form.platform,
+        affiliateUrl: form.productType === "affiliate" ? form.affiliateUrl : null,
+        productType: form.productType,
+        highlights: parseHighlights(form.highlights),
+        imageUrl: form.imageUrl || null,
+        featured: form.featured,
+        productStatus: form.productStatus,
+      });
+
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+
+      setMessage("Produto criado com sucesso.");
+      resetForm();
+    });
+  }
+
+  function handleDelete(productId: string, title: string) {
+    const confirmed = window.confirm(`Excluir o produto "${title}"?`);
+    if (!confirmed) return;
+
+    setMessage("");
+    setError("");
+
+    startTransition(async () => {
+      const result = await deleteProductAction(productId);
+
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+
+      setMessage("Produto removido com sucesso.");
+    });
+  }
 
   return (
-    <div className={`container ${styles.page}`}>
-      <section className={`panel ${styles.header}`}>
-        <h1 className="sectionTitle">Admin Arara</h1>
-        <p className="sectionText">
-          Painel simples para cadastrar produto próprio ou oferta afiliada.
-          Persistência local via localStorage.
-        </p>
+    <div className={`container ${styles.wrapper}`}>
+      <div className={styles.header}>
+        <div>
+          <span className="badge">Admin</span>
+          <h1 className={styles.title}>Painel administrativo</h1>
+          <p className={styles.subtitle}>
+            Cadastre e remova produtos diretamente no Supabase.
+          </p>
+        </div>
+      </div>
+
+      <section className={styles.statsGrid}>
+        <article className={`card ${styles.statCard}`}>
+          <span className="muted">Total</span>
+          <strong>{stats.total}</strong>
+        </article>
+
+        <article className={`card ${styles.statCard}`}>
+          <span className="muted">Destaques</span>
+          <strong>{stats.featured}</strong>
+        </article>
+
+        <article className={`card ${styles.statCard}`}>
+          <span className="muted">Afiliados</span>
+          <strong>{stats.affiliate}</strong>
+        </article>
+
+        <article className={`card ${styles.statCard}`}>
+          <span className="muted">Próprios</span>
+          <strong>{stats.own}</strong>
+        </article>
       </section>
 
       <div className={styles.layout}>
-        <form onSubmit={handleSubmit} className={`panel ${styles.formPanel}`}>
+        <section className={`panel ${styles.formPanel}`}>
           <h2>Novo produto</h2>
 
-          <div className={styles.formGrid}>
-            <div className={styles.full}>
-              <label className={styles.label}>Título</label>
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.grid2}>
+              <label className={styles.fieldGroup}>
+                <span>Título</span>
+                <input
+                  className="field"
+                  value={form.title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  placeholder="Nome do produto"
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span>Slug</span>
+                <input
+                  className="field"
+                  value={form.slug}
+                  onChange={(e) => updateField("slug", slugify(e.target.value))}
+                  placeholder="slug-do-produto"
+                />
+              </label>
+            </div>
+
+            <div className={styles.grid3}>
+              <label className={styles.fieldGroup}>
+                <span>Nicho</span>
+                <select
+                  className="select"
+                  value={form.niche}
+                  onChange={(e) => updateField("niche", e.target.value as Niche)}
+                >
+                  {NICHE_OPTIONS.map((niche) => (
+                    <option key={niche} value={niche}>
+                      {niche}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span>Tipo</span>
+                <select
+                  className="select"
+                  value={form.productType}
+                  onChange={(e) =>
+                    updateField("productType", e.target.value as ProductType)
+                  }
+                >
+                  <option value="affiliate">Afiliado</option>
+                  <option value="own">Próprio</option>
+                </select>
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span>Status</span>
+                <select
+                  className="select"
+                  value={form.productStatus}
+                  onChange={(e) =>
+                    updateField("productStatus", e.target.value as ProductStatus)
+                  }
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label className={styles.fieldGroup}>
+              <span>Descrição curta</span>
               <input
-                required
                 className="field"
-                value={form.title}
-                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                value={form.shortDescription}
+                onChange={(e) => updateField("shortDescription", e.target.value)}
+                placeholder="Resumo curto do produto"
               />
-            </div>
+            </label>
 
-            <div>
-              <label className={styles.label}>Tipo</label>
-              <select
-                className="select"
-                value={form.type}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, type: e.target.value as ProductType }))
-                }
-              >
-                <option value="own">Produto próprio</option>
-                <option value="affiliate">Afiliado</option>
-              </select>
-            </div>
-
-            <div>
-              <label className={styles.label}>Nicho</label>
-              <select
-                className="select"
-                value={form.niche}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, niche: e.target.value as Niche }))
-                }
-              >
-                <option>Marketing Digital</option>
-                <option>Finanças</option>
-                <option>Fitness</option>
-                <option>Idiomas</option>
-              </select>
-            </div>
-
-            <div className={styles.full}>
-              <label className={styles.label}>Descrição curta</label>
+            <label className={styles.fieldGroup}>
+              <span>Descrição longa</span>
               <textarea
-                required
-                className="textarea"
-                value={form.description}
-                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-              />
-            </div>
-
-            <div className={styles.full}>
-              <label className={styles.label}>Descrição longa</label>
-              <textarea
-                required
-                className="textarea"
+                className="field"
+                rows={5}
                 value={form.longDescription}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, longDescription: e.target.value }))
-                }
+                onChange={(e) => updateField("longDescription", e.target.value)}
+                placeholder="Descrição completa do produto"
               />
+            </label>
+
+            <div className={styles.grid4}>
+              <label className={styles.fieldGroup}>
+                <span>Preço</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="field"
+                  value={form.price}
+                  onChange={(e) => updateField("price", e.target.value)}
+                  placeholder="97.00"
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span>Preço original</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="field"
+                  value={form.originalPrice}
+                  onChange={(e) => updateField("originalPrice", e.target.value)}
+                  placeholder="197.00"
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span>Popularidade</span>
+                <input
+                  type="number"
+                  className="field"
+                  value={form.popularity}
+                  onChange={(e) => updateField("popularity", e.target.value)}
+                  placeholder="50"
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span>Avaliação</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="field"
+                  value={form.rating}
+                  onChange={(e) => updateField("rating", e.target.value)}
+                  placeholder="4.5"
+                />
+              </label>
             </div>
 
-            <div>
-              <label className={styles.label}>Preço</label>
-              <input
-                required
-                type="number"
-                className="field"
-                value={form.price}
-                onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-              />
+            <div className={styles.grid2}>
+              <label className={styles.fieldGroup}>
+                <span>Plataforma</span>
+                <input
+                  className="field"
+                  value={form.platform}
+                  onChange={(e) => updateField("platform", e.target.value)}
+                  placeholder="Hotmart, Kiwify..."
+                />
+              </label>
+
+              <label className={styles.fieldGroup}>
+                <span>URL da imagem</span>
+                <input
+                  className="field"
+                  value={form.imageUrl}
+                  onChange={(e) => updateField("imageUrl", e.target.value)}
+                  placeholder="https://..."
+                />
+              </label>
             </div>
 
-            <div>
-              <label className={styles.label}>Preço original</label>
-              <input
-                type="number"
-                className="field"
-                value={form.originalPrice}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, originalPrice: e.target.value }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className={styles.label}>Popularidade</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                className="field"
-                value={form.popularity}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, popularity: e.target.value }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className={styles.label}>Avaliação</label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                step="0.1"
-                className="field"
-                value={form.rating}
-                onChange={(e) => setForm((prev) => ({ ...prev, rating: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <label className={styles.label}>Plataforma</label>
-              <input
-                className="field"
-                value={form.platform}
-                onChange={(e) => setForm((prev) => ({ ...prev, platform: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <label className={styles.label}>Destaques</label>
-              <input
-                className="field"
-                value={form.highlights}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, highlights: e.target.value }))
-                }
-                placeholder="Acesso imediato, Suporte, Bônus"
-              />
-            </div>
-
-            {form.type === "affiliate" ? (
-              <div className={styles.full}>
-                <label className={styles.label}>Link de afiliado</label>
+            {form.productType === "affiliate" ? (
+              <label className={styles.fieldGroup}>
+                <span>URL de afiliado</span>
                 <input
                   className="field"
                   value={form.affiliateUrl}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, affiliateUrl: e.target.value }))
-                  }
-                  placeholder="https://seu-link-de-afiliado.com/..."
+                  onChange={(e) => updateField("affiliateUrl", e.target.value)}
+                  placeholder="https://..."
                 />
-              </div>
+              </label>
             ) : null}
 
-            <div className={styles.full}>
-              <label className={styles.label}>Upload de imagem</label>
-              <input
-                type="file"
-                accept="image/*"
+            <label className={styles.fieldGroup}>
+              <span>Destaques</span>
+              <textarea
                 className="field"
-                onChange={(e) => handleFile(e.target.files?.[0])}
+                rows={5}
+                value={form.highlights}
+                onChange={(e) => updateField("highlights", e.target.value)}
+                placeholder={`Um item por linha
+Acesso imediato
+Suporte incluso
+Garantia de 7 dias`}
               />
+            </label>
+
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={form.featured}
+                onChange={(e) => updateField("featured", e.target.checked)}
+              />
+              <span>Marcar como destaque</span>
+            </label>
+
+            {message ? <p className={styles.success}>{message}</p> : null}
+            {error ? <p className={styles.error}>{error}</p> : null}
+
+            <div className={styles.actions}>
+              <button type="submit" className="btn btnPrimary" disabled={isPending}>
+                {isPending ? "Salvando..." : "Criar produto"}
+              </button>
             </div>
-          </div>
+          </form>
+        </section>
 
-          {form.image ? (
-            <div className={styles.previewBox}>
-              <span className={styles.label}>Prévia</span>
-              <img src={form.image} alt="Prévia" className={styles.preview} />
-            </div>
-          ) : null}
+        <section className={`panel ${styles.listPanel}`}>
+          <h2>Produtos cadastrados</h2>
 
-          {notice ? <div className={styles.notice}>{notice}</div> : null}
-
-          <button type="submit" className="btn btnPrimary">
-            Salvar produto
-          </button>
-        </form>
-
-        <div className={styles.sidebar}>
-          <section className={`panel ${styles.analytics}`}>
-            <h2>Analytics básico</h2>
-
-            <div className={styles.metrics}>
-              <div className={`card ${styles.metric}`}>
-                <span className="muted">Page views</span>
-                <strong>{analytics.pageViews}</strong>
-              </div>
-              <div className={`card ${styles.metric}`}>
-                <span className="muted">Checkout iniciado</span>
-                <strong>{analytics.checkoutStarts}</strong>
-              </div>
-              <div className={`card ${styles.metric}`}>
-                <span className="muted">Checkout concluído</span>
-                <strong>{analytics.checkoutCompletions}</strong>
-              </div>
-              <div className={`card ${styles.metric}`}>
-                <span className="muted">Cliques externos</span>
-                <strong>{analytics.outboundClicks}</strong>
-              </div>
-            </div>
-
-            <div className={`card ${styles.metricWide}`}>
-              <span className="muted">Produtos adicionados no admin</span>
-              <strong>{analytics.adminAdds}</strong>
-            </div>
-
-            <div className={styles.subsection}>
-              <h3>Produtos mais vistos</h3>
-              <div className={styles.list}>
-                {topViewed.length === 0 ? (
-                  <div className={styles.empty}>Sem dados ainda.</div>
-                ) : (
-                  topViewed.map((item) => (
-                    <div key={item.slug} className={`card ${styles.row}`}>
-                      <span>{item.title}</span>
-                      <strong>{item.views}</strong>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className={`panel ${styles.locals}`}>
-            <h2>Produtos cadastrados via admin</h2>
-
-            <div className={styles.list}>
-              {customProducts.length === 0 ? (
-                <div className={styles.empty}>Nenhum produto local cadastrado.</div>
-              ) : (
-                customProducts.map((item) => (
-                  <div key={item.id} className={`card ${styles.productRow}`}>
+          {initialProducts.length === 0 ? (
+            <p className="muted">Nenhum produto encontrado.</p>
+          ) : (
+            <div className={styles.productList}>
+              {initialProducts.map((product) => (
+                <article key={product.id} className={`card ${styles.productCard}`}>
+                  <div className={styles.productCardHeader}>
                     <div>
-                      <strong>{item.title}</strong>
-                      <p>
-                        {item.niche} • {item.type === "own" ? "Produto próprio" : "Afiliado"} •{" "}
-                        {formatCurrency(item.price)}
-                      </p>
+                      <h3>{product.title}</h3>
+                      <p className="muted">{product.slug}</p>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => handleRemove(item.slug)}
-                      className={styles.removeBtn}
+                      className="btn btnSecondary"
+                      onClick={() => handleDelete(product.id, product.title)}
+                      disabled={isPending}
                     >
-                      Remover
+                      Excluir
                     </button>
                   </div>
-                ))
-              )}
+
+                  <div className={styles.productMeta}>
+                    <span>
+                      <strong>Tipo:</strong>{" "}
+                      {product.type === "affiliate" ? "Afiliado" : "Próprio"}
+                    </span>
+                    <span>
+                      <strong>Nicho:</strong> {product.niche}
+                    </span>
+                    <span>
+                      <strong>Plataforma:</strong> {product.platform}
+                    </span>
+                    <span>
+                      <strong>Preço:</strong> {formatCurrency(product.price)}
+                    </span>
+                  </div>
+
+                  <p className={styles.productDescription}>{product.description}</p>
+                </article>
+              ))}
             </div>
-          </section>
-        </div>
+          )}
+        </section>
       </div>
     </div>
   );
