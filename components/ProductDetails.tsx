@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { Product } from "../lib/types";
-import { formatCurrency, getGradientByNiche } from "../lib/utils";
+import type { Product } from "../lib/types";
 import { trackEvent } from "../lib/analytics";
+import { formatCurrency, getGradientByNiche } from "../lib/utils";
 import styles from "./ProductDetails.module.css";
 
 type ProductDetailsProps = {

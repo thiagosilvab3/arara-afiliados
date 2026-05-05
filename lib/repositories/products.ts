@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "../supabase/server";
-import { Product } from "../types";
+import type { Product } from "../types";
 
 type ProductRow = {
   id: string;
@@ -35,7 +35,8 @@ function mapProduct(row: ProductRow): Product {
     description: row.short_description,
     longDescription: row.long_description,
     price: Number(row.price),
-    originalPrice: row.original_price != null ? Number(row.original_price) : undefined,
+    originalPrice:
+      row.original_price != null ? Number(row.original_price) : undefined,
     popularity: row.popularity,
     rating: Number(row.rating),
     platform: row.platform,
