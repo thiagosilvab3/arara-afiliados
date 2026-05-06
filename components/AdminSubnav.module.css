@@ -1,0 +1,40 @@
+.wrap {
+  margin: 18px 0 22px;
+}
+
+.inner {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 14px;
+  text-decoration: none;
+  font-weight: 700;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: 0.2s ease;
+}
+
+.link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.active {
+  color: #082f49;
+  background: #22d3ee;
+  border-color: transparent;
+}
+
+.active:hover {
+  color: #082f49;
+  background: #67e8f9;
+}

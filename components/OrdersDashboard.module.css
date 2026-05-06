@@ -1,0 +1,184 @@
+.page {
+  padding: 28px 0 40px;
+}
+
+.header {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  margin: 0;
+  color: #fff;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.statCard {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.statCard span {
+  color: #94a3b8;
+  font-size: 0.92rem;
+}
+
+.statCard strong {
+  color: #fff;
+  font-size: 1.35rem;
+}
+
+.success,
+.error {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+}
+
+.success {
+  color: #d1fae5;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.error {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.emptyPanel {
+  padding: 24px;
+}
+
+.orderList {
+  display: grid;
+  gap: 16px;
+}
+
+.orderCard {
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+
+.orderHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.orderHeader h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.infoItem {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.label {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.infoItem strong {
+  color: #fff;
+  font-size: 0.98rem;
+  word-break: break-word;
+}
+
+.notesBox {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.notesBox p {
+  margin: 0;
+  color: #e2e8f0;
+}
+
+.actionsRow {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.statusField {
+  display: grid;
+  gap: 8px;
+  min-width: 280px;
+}
+
+@media (max-width: 1100px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .infoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .stats,
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .orderHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actionsRow {
+    align-items: stretch;
+  }
+
+  .statusField {
+    min-width: 100%;
+  }
+}

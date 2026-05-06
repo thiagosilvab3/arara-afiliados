@@ -1,9 +1,9 @@
-import { Niche, PriceFilter } from "./types";
+import type { Niche, PriceFilter } from "./types";
 
 export function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
-    currency: "BRL"
+    currency: "BRL",
   }).format(value);
 }
 

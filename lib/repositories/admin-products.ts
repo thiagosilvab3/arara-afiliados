@@ -1,5 +1,5 @@
-import { createSupabaseAdminClient } from "../supabase/admin";
-import type { Product } from "../types";
+import { createSupabaseServerClient } from "../supabase/server";
+import type { Product, ProductStatus } from "../types";
 
 type ProductRow = {
   id: string;
@@ -18,6 +18,7 @@ type ProductRow = {
   highlights: unknown;
   image_url: string | null;
   featured: boolean;
+  product_status: ProductStatus;
 };
 
 function toStringArray(value: unknown): string[] {
@@ -44,11 +45,12 @@ function mapProduct(row: ProductRow): Product {
     highlights: toStringArray(row.highlights),
     imageUrl: row.image_url ?? undefined,
     featured: row.featured,
+    productStatus: row.product_status,
   };
 }
 
 export async function listAdminProducts() {
-  const supabase = createSupabaseAdminClient();
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("products")
