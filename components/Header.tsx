@@ -26,18 +26,24 @@ export async function Header() {
     <header className={styles.header}>
       <div className={`container ${styles.inner}`}>
         <Link href="/" className={styles.brand}>
-          <div className={styles.logo}>A</div>
+          <span className={styles.logo}>A</span>
 
-          <div>
-            <div className={styles.name}>Arara</div>
-            <div className={styles.tagline}>Produtos digitais e afiliados</div>
-          </div>
+          <span>
+            <span className={styles.name}>Arara</span>
+            <span className={styles.tagline}>Produtos digitais e afiliados</span>
+          </span>
         </Link>
 
-        <nav className={styles.nav}>
-          <Link href="/">Catálogo</Link>
+        <nav className={styles.nav} aria-label="Navegação principal">
+          <Link href="/" className={styles.navLink}>
+            Catálogo
+          </Link>
 
-          {isAdmin ? <Link href="/admin">Admin</Link> : null}
+          {isAdmin ? (
+            <Link href="/admin" className={`${styles.navLink} ${styles.adminLink}`}>
+              Admin
+            </Link>
+          ) : null}
 
           {user ? (
             <form action={logoutAction}>
@@ -46,7 +52,9 @@ export async function Header() {
               </button>
             </form>
           ) : (
-            <Link href="/login">Entrar</Link>
+            <Link href="/login" className={styles.loginButton}>
+              Entrar
+            </Link>
           )}
         </nav>
       </div>

@@ -1,14 +1,16 @@
 import Link from "next/link";
 import styles from "./AdminSubnav.module.css";
 
+type AdminPath = "/admin" | "/admin/pedidos" | "/admin/analytics";
+
 type AdminSubnavProps = {
-  currentPath: "/admin" | "/admin/pedidos";
+  currentPath: AdminPath;
 };
 
 export function AdminSubnav({ currentPath }: AdminSubnavProps) {
   return (
-    <div className={styles.wrap}>
-      <div className={`container ${styles.inner}`}>
+    <nav className={styles.wrap} aria-label="Navegação administrativa">
+      <div className={styles.inner}>
         <Link
           href="/admin"
           className={`${styles.link} ${
@@ -26,7 +28,16 @@ export function AdminSubnav({ currentPath }: AdminSubnavProps) {
         >
           Pedidos
         </Link>
+
+        <Link
+          href="/admin/analytics"
+          className={`${styles.link} ${
+            currentPath === "/admin/analytics" ? styles.active : ""
+          }`}
+        >
+          Analytics
+        </Link>
       </div>
-    </div>
+    </nav>
   );
 }
