@@ -16,8 +16,12 @@ export function ProductCard({ product }: { product: Product }) {
         className={styles.hero}
         style={{ backgroundImage: getGradientByNiche(product.niche) }}
       >
-        {product.image ? (
-          <img src={product.image} alt={product.title} className={styles.image} />
+        {product.imageUrl ? (
+          <img
+            src={product.imageUrl}
+            alt={product.title}
+            className={styles.image}
+          />
         ) : (
           <div className={styles.placeholder}>
             <span className="badge">{product.niche}</span>
@@ -51,10 +55,16 @@ export function ProductCard({ product }: { product: Product }) {
         <div className={styles.priceBox}>
           <div>
             {product.originalPrice ? (
-              <div className={styles.oldPrice}>{formatCurrency(product.originalPrice)}</div>
+              <div className={styles.oldPrice}>
+                {formatCurrency(product.originalPrice)}
+              </div>
             ) : null}
+
             <div className={styles.price}>{formatCurrency(product.price)}</div>
-            {discount > 0 ? <div className={styles.discount}>{discount}% OFF</div> : null}
+
+            {discount > 0 ? (
+              <div className={styles.discount}>{discount}% OFF</div>
+            ) : null}
           </div>
 
           <Link href={`/produto/${product.slug}`} className="btn btnPrimary">
